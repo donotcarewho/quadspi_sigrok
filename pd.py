@@ -181,8 +181,8 @@ class Decoder(srd.Decoder):
             self.flush_data()
         
         if self.bitcount > 0:
-            self.put(self.startsample, self.samplenum, self.out_ann, [17,[ f"Incomplete: {self.byte:02x}"]])
-
+            # self.put(self.startsample, self.samplenum, self.out_ann, [17,[ f"Incomplete: {self.byte:02x}"]])
+            self.put(self.startsample, self.samplenum, self.out_ann, [17,[ "Incomplete: {:02x}".format(self.byte) ]])
         self.reset_state()
 
     def parse_bits(self, io0, io1, io2, io3):
@@ -201,8 +201,9 @@ class Decoder(srd.Decoder):
             self.byte = ((self.byte | io1) << 1) | io0
         elif self.iolines == 4: # QUAD
             self.byte = ((((((self.byte | io3) << 1) | io2) << 1) | io1) << 1) | io0
-        else: # normal SPI            
-            self.byte |= io0 ^ io1  # XOR MOSI and MISO so we don't need to know which one is active
+        else: # standard SPI            
+            #self.byte |= io0 ^ io1  # XOR MOSI and MISO so we don't need to know which one is active
+            self.byte |= io0  #  MOSI，  for MISO may be FF/00
         
         self.bitcount += self.iolines
 
@@ -240,7 +241,8 @@ class Decoder(srd.Decoder):
 
     def parse_byte(self):
         if self.state == 0:
-            self.put(self.startsample, self.samplenum, self.out_ann, [0,[ f"{self.byte:02x}"]])
+            # self.put(self.startsample, self.samplenum, self.out_ann, [0,[ f"{self.byte:02x}"]])
+            self.put(self.startsample, self.samplenum, self.out_ann, [0,[ "{:02x}".format(self.byte) ]])
 
             if self.byte in self.instructions:
                 self.current_ins = self.instructions[self.byte]
@@ -252,21 +254,25 @@ class Decoder(srd.Decoder):
         
         elif self.state == 1:  # Unknown basic SPI bytes
             id = 4 + self.iolines - 1 - (self.iolines == 4)
-            self.put(self.startsample, self.samplenum, self.out_ann, [id,[ f"{self.byte:02x}"]])
+            # self.put(self.startsample, self.samplenum, self.out_ann, [id,[ f"{self.byte:02x}"]])  
+            self.put(self.startsample, self.samplenum, self.out_ann, [id,[ "{:02x}".format(self.byte) ]])
 
         elif self.state == 2:  # Address
             id = 1 + self.iolines - 1 - (self.iolines == 4)
-            self.put(self.startsample, self.samplenum, self.out_ann, [id,[ f"{self.byte:02x}"]])
+            # self.put(self.startsample, self.samplenum, self.out_ann, [id,[ f"{self.byte:02x}"]])
+            self.put(self.startsample, self.samplenum, self.out_ann, [id,[ "{:02x}".format(self.byte) ]])
             self.address =  (self.address << 8) | self.byte
             if self.expected > 1:                
                 self.expected -= 1
             else:
-                self.put(self.blockstart, self.samplenum, self.out_ann, [14,[ f"Addr: 0x{self.address:06x}", f"A: 0x{self.address:06x}", f"0x{self.address:x}"]])
+                # self.put(self.blockstart, self.samplenum, self.out_ann, [14,[ f"Addr: 0x{self.address:06x}", f"A: 0x{self.address:06x}", f"0x{self.address:x}"]])
+                self.put(self.blockstart, self.samplenum, self.out_ann, [14,[ "Addr: 0x{:06x}".format(self.address), "A: 0x{:06x}".format(self.address), "0x{}".format(self.address) ]])
                 self.next_state()
 
         elif self.state == 3:  # Dummy
             id = 4 + self.iolines - 1 - (self.iolines == 4)
-            self.put(self.startsample, self.samplenum, self.out_ann, [id,[ f"{self.byte:02x}"]])
+            # self.put(self.startsample, self.samplenum, self.out_ann, [id,[ f"{self.byte:02x}"]])
+            self.put(self.startsample, self.samplenum, self.out_ann, [id,[ "{:02x}".format(self.byte) ]])
             if self.expected > 1:                
                 self.expected -= 1
             else:        
@@ -278,7 +284,8 @@ class Decoder(srd.Decoder):
             else: # MISO
                 id = 10
             id += self.iolines - 1 - (self.iolines == 4)
-            self.put(self.startsample, self.samplenum, self.out_ann, [id,[ f"{self.byte:02x}"]])
+            # self.put(self.startsample, self.samplenum, self.out_ann, [id,[ f"{self.byte:02x}"]])
+            self.put(self.startsample, self.samplenum, self.out_ann, [id,[ "{:02x}".format(self.byte) ]])
             self.data.append(self.byte)
             if len(self.data) > 256:
                 self.flush_data()
@@ -286,8 +293,10 @@ class Decoder(srd.Decoder):
         self.byte = 0
 
     def put_data(self, id, data):
-        hexbytes = " ".join(f"{dat:02x}" for dat in data)
-        st = f"{len(data)}[{hexbytes}]"
+        # hexbytes = " ".join(f"{dat:02x}" for dat in data)
+        hexbytes = " ".join("{:02x}".format(dat) for dat in data)
+        # st = f"{len(data)}[{hexbytes}]"
+        st = "{}[{}]".format(len(data), hexbytes)
         self.put(self.blockstart, self.samplenum, self.out_ann, [id,[ st ]])
 
     def decode(self):
@@ -320,4 +329,3 @@ class Decoder(srd.Decoder):
                     self.parse_byte()
                     self.bitcount = 0
             
-
